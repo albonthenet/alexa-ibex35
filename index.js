@@ -9,16 +9,22 @@ const Alexa = require('ask-sdk-core');
 //General constants
 const APP_ID = "amzn1.ask.skill.284a9f0d-e850-4698-ac67-fb6c86abd8a2";
 const SKILL_NAME = 'IBEX 35 info';
-const WELCOME_MESSAGE = 'Bienvenido a IBEX 35 info. ¿Quieres conocer la cotización o variación de algún valor?';
-const REPROMPT_MESSAGE = '¿Quieres información sobre otro valor?';
+//const WELCOME_MESSAGE = 'Bienvenido a IBEX 35 info. ¿Quieres conocer la cotización o variación de algún valor?';
+const WELCOME_MESSAGE = 'Bienvenido a IBEX 35 info. Puedes pedirme la cotización o variación de un valor de la bolsa Española. ¿Qué deseas hacer?';
+const REPROMPT_MESSAGE = 'Puedo decirte la cotización, variación o variación por mes, trimestre, semestre o anual de un valor. ¿Qué quieres hacer?';
+const AFTER_INFO_MESSAGE = 'Puedo darte la cotización o variación de otro valor. ¿Qué deseas hacer?'
 const GET_FACT_MESSAGE = 'La cotización actual es: ';
-const HELP_MESSAGE = 'Puedes pedirme la cotización, variación o variación por meses de un valor o decir salir. ¿Que quieres hacer?';
-const HELP_REPROMPT = 'Como puedo ayudarte?';
+const HELP_MESSAGE = 'Puedes pedirme la cotización, variación o variación por mes, trimestre, semestre o anual de un valor de la bolsa Española. También puedes decir salir para finalizar. ¿Que quieres hacer?';
+const HELP_MESSAGE_BRIEF = 'Puedes pedirme la cotización o variación de un valor. ¿Qué deseas hacer?';
+const HELP_REPROMPT = '¿Qué deseas hacer?';
 const STOP_MESSAGE = 'Suerte con tus inversiones, ¡adios!';
+const CANCEL_MESSAGE = 'Cancelo'
+//const CANCEL_MESSAGE = 'Cancelo. Puedo decirte la cotización o variación de algún valor ¿Qué deseas?';
+//const CANCEL_REPROMPT = 'Puedes pedirme la cotización o variación de otro valor ¿Qué quieres?';
 //const ERROR_MESSAGE = 'Se ha producido un error'
 
 //Additional skill consts
-const ERROR_MESSAGE = 'Lo siento, no te he entendido o no tengo información sobre ese valor';
+const ERROR_MESSAGE = 'Lo siento, no te he entendido o no tengo información sobre ese valor. ' + HELP_MESSAGE_BRIEF;
 const ERROR_MESSAGE_REPROMPT = 'Lo siento, no te he entendido, ' + HELP_MESSAGE;
 const NOT_STOCK_FOUND_MESSAGE = 'Lo siento, no tengo información sobre ese valor. ¿Quieres información sobre otro valor del IBEX 35?';
 const NOT_STOCK_FOUND_MESSAGE_REPROMPT = 'No entendí tu última petición, ¿Quieres información sobre otro valor del IBEX 35?';
@@ -136,6 +142,10 @@ const LaunchRequestHandler = {
   },
   handle(handlerInput) {
       console.log("welcome message");
+      //For repetition intent
+      const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
+      sessionAttributes.speakOutput = WELCOME_MESSAGE;
+      
       return handlerInput.responseBuilder
       .speak(WELCOME_MESSAGE)
       .withSimpleCard(SKILL_NAME, "Bienvenido a IBEX 35 info")
@@ -158,6 +168,10 @@ const GetStockCurrentPriceVariationHandler = {
     var stockVariationPercentage;
     const stockID = handlerInput.requestEnvelope.request.intent.slots.StockName.resolutions.resolutionsPerAuthority[0].values[0].value.id;
     const stockName =  handlerInput.requestEnvelope.request.intent.slots.StockName.resolutions.resolutionsPerAuthority[0].values[0].value.name;
+    
+    //const requestAttributes = handlerInput.attributesManager.getRequestAttributes();
+    //Initiating sessionAttributes object
+    const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
 
     return new Promise((resolve, reject) => {
     httpGet(0,stockID).then((response) => {
@@ -166,8 +180,12 @@ const GetStockCurrentPriceVariationHandler = {
       {
         stockPrice = roundNumber(queryResult["Global Quote"]["05. price"],2); 
         console.log("la accion vale " + stockPrice); 
-        speechOutput = "La cotización actual es de " + stockPrice + " euros, ¿Quieres información sobre otro valor?";
+        speechOutput = "La cotización actual es de " + stockPrice + " euros, " + AFTER_INFO_MESSAGE;
         console.log(speechOutput); 
+        
+        //Saving last response for possible repetition (AMAZON.RepeatIntent)
+        sessionAttributes.speakOutput = speechOutput;
+        //handlerInput.attributesManager.setSessionAttributes(sessionAttributes);
         
         resolve(handlerInput.responseBuilder
         .speak(speechOutput)
@@ -179,8 +197,10 @@ const GetStockCurrentPriceVariationHandler = {
       {
         stockVariationPercentage = roundNumber(queryResult["Global Quote"]["10. change percent"],2); 
         console.log("la accion varia " + stockVariationPercentage); 
-        speechOutput = "La variación respecto apertura es del " + stockVariationPercentage + "%, ¿Quieres información sobre otro valor?";
+        speechOutput = "La variación respecto apertura es del " + stockVariationPercentage + "%, " + AFTER_INFO_MESSAGE;
         console.log(speechOutput); 
+        
+        sessionAttributes.speakOutput = speechOutput;
         
         resolve(handlerInput.responseBuilder
         .speak(speechOutput)
@@ -188,6 +208,7 @@ const GetStockCurrentPriceVariationHandler = {
         .reprompt(REPROMPT_MESSAGE)
         .getResponse());
       }
+      
     }).catch((error) => {
       resolve(handlerInput.responseBuilder
       .speak(ERROR_MESSAGE)
@@ -212,6 +233,9 @@ const GetStockVariationInTimeHandler = {
     
     const timeperiodID = handlerInput.requestEnvelope.request.intent.slots.VariationPeriod.resolutions.resolutionsPerAuthority[0].values[0].value.id;
     //const timeperiodName =  handlerInput.requestEnvelope.request.intent.slots.VariationPeriod.resolutions.resolutionsPerAuthority[0].values[0].value.name;
+  
+    //Used for repetition intent
+    const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
 
     return new Promise((resolve, reject) => {
     httpGet(1,stockID).then((response) => {
@@ -223,8 +247,10 @@ const GetStockVariationInTimeHandler = {
 	      
 	      if (stockVariationPercentage != 'no_data_available'){
           //stockPrice = roundNumber(queryResult["Global Quote"]["05. price"],2); 
-          speechOutput = "La variación en el último mes de " + stockName + " es del " + stockVariationPercentage +"%. ¿Quieres información sobre otro valor?";
+          speechOutput = "La variación en el último mes de " + stockName + " es del " + stockVariationPercentage +"%. " + AFTER_INFO_MESSAGE;
           console.log(speechOutput); 
+          
+          sessionAttributes.speakOutput = speechOutput;
           
           resolve(handlerInput.responseBuilder
           .speak(speechOutput)
@@ -243,8 +269,10 @@ const GetStockVariationInTimeHandler = {
    
 	      stockVariationPercentage = getVariation(queryResult,3);
         //stockPrice = roundNumber(queryResult["Global Quote"]["05. price"],2); 
-        speechOutput = "La variación en el último trimestre de " + stockName + " es del " + stockVariationPercentage +"%. ¿Quieres información sobre otro valor?";
+        speechOutput = "La variación en el último trimestre de " + stockName + " es del " + stockVariationPercentage +"%. " + AFTER_INFO_MESSAGE;
         console.log(speechOutput); 
+        
+        sessionAttributes.speakOutput = speechOutput;
         
         resolve(handlerInput.responseBuilder
         .speak(speechOutput)
@@ -257,8 +285,10 @@ const GetStockVariationInTimeHandler = {
        
 	      stockVariationPercentage = getVariation(queryResult,6);
         //stockPrice = roundNumber(queryResult["Global Quote"]["05. price"],2); 
-        speechOutput = "La variación en el último semestre de " + stockName + " es del " + stockVariationPercentage +"%. ¿Quieres información sobre otro valor?";
+        speechOutput = "La variación en el último semestre de " + stockName + " es del " + stockVariationPercentage +"%. " + AFTER_INFO_MESSAGE;
         console.log(speechOutput); 
+        
+        sessionAttributes.speakOutput = speechOutput;
         
         resolve(handlerInput.responseBuilder
         .speak(speechOutput)
@@ -271,8 +301,10 @@ const GetStockVariationInTimeHandler = {
        
 	      stockVariationPercentage = getVariation(queryResult,12);
         //stockPrice = roundNumber(queryResult["Global Quote"]["05. price"],2); 
-        speechOutput = "La variación en el último año de " + stockName + " es del " + stockVariationPercentage +"%. ¿Quieres información sobre otro valor?";
+        speechOutput = "La variación en el último año de " + stockName + " es del " + stockVariationPercentage +"%. " + AFTER_INFO_MESSAGE;
         console.log(speechOutput); 
+        
+        sessionAttributes.speakOutput = speechOutput;
         
         resolve(handlerInput.responseBuilder
         .speak(speechOutput)
@@ -286,6 +318,8 @@ const GetStockVariationInTimeHandler = {
         .speak(ERROR_MESSAGE)
         .getResponse());
      }
+     //Saving last response for possible repetition (AMAZON.RepeatIntent)
+     //this.attributes.lastSpeech = speechOutput;
      }).catch((error) => {
         resolve(handlerInput.responseBuilder
         .speak(ERROR_MESSAGE)
@@ -309,12 +343,52 @@ const HelpHandler = {
   },
 };
 
+/*const CancelHandler = {
+  canHandle(handlerInput) {
+    const request = handlerInput.requestEnvelope.request;
+    return request.type === 'IntentRequest'
+      && request.intent.name === 'AMAZON.CancelIntent';
+  },
+  handle(handlerInput) {
+    return handlerInput.responseBuilder
+      .speak(CANCEL_MESSAGE)
+      .reprompt(CANCEL_REPROMPT)
+      .getResponse();
+  },
+};*/
+const RepeatHandler = {
+  canHandle(handlerInput) {
+    const request = handlerInput.requestEnvelope.request;
+    return request.type === 'IntentRequest'
+      && request.intent.name === 'AMAZON.RepeatIntent';
+  },
+  handle(handlerInput) {
+    const sessionAttributes = handlerInput.attributesManager.getSessionAttributes();
+    return handlerInput.responseBuilder
+      .speak("Repito, " + sessionAttributes.speakOutput)
+      .reprompt(REPROMPT_MESSAGE)
+      .getResponse();
+  },
+};
+
+const CancelHandler = {
+  canHandle(handlerInput) {
+    const request = handlerInput.requestEnvelope.request;
+    return request.type === 'IntentRequest'
+      && request.intent.name === 'AMAZON.CancelIntent';
+  },
+  handle(handlerInput) {
+    return handlerInput.responseBuilder
+      .speak(CANCEL_MESSAGE+ ',' +STOP_MESSAGE)
+      .getResponse();
+  },
+};
+
 const ExitHandler = {
   canHandle(handlerInput) {
     const request = handlerInput.requestEnvelope.request;
     return request.type === 'IntentRequest'
-      && (request.intent.name === 'AMAZON.CancelIntent'
-        || request.intent.name === 'AMAZON.StopIntent');
+      && (request.intent.name === 'AMAZON.StopIntent');
   },
   handle(handlerInput) {
     return handlerInput.responseBuilder
@@ -330,7 +404,6 @@ const SessionEndedRequestHandler = {
   },
   handle(handlerInput) {
     console.log(`Session ended with reason: ${handlerInput.requestEnvelope.request.reason}`);
-
     return handlerInput.responseBuilder.getResponse();
   },
 };
@@ -375,6 +448,8 @@ exports.handler = skillBuilder
     GetStockCurrentPriceVariationHandler,
     GetStockVariationInTimeHandler,
     HelpHandler,
+    RepeatHandler,
+    CancelHandler,
     ExitHandler,
     SessionEndedRequestHandler
   )
